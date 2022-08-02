@@ -42,7 +42,7 @@ class Cell:
         return self.column + str(self.row)
 
     def __str__(self):
-        return "'{}'!{}".format(self.sheet.name,self.get_local_address())
+        return f"'{self.sheet.name}'!{self.get_local_address()}"
 
     @staticmethod
     def convert_to_column_index(s):
@@ -73,37 +73,32 @@ class Cell:
             sheet_name = sheet_name.strip('\'') if sheet_name is not None else sheet_name
             column = Cell.convert_to_column_name(int(alternate_res.group('column')))
             row = alternate_res.group('row')
-            return sheet_name, column, row
         else:
             res = Cell._a1_cell_addr_regex.match(cell_addr_str)
-            if res is not None:
-                sheet_name = res.group('sheetname')
-                sheet_name = sheet_name.strip('\'') if sheet_name is not None else sheet_name
-                column = res.group('column')
-                row = res.group('row')
-                return sheet_name, column, row
-            else:
+            if res is None:
                 return None, None, None
+            sheet_name = res.group('sheetname')
+            sheet_name = sheet_name.strip('\'') if sheet_name is not None else sheet_name
+            column = res.group('column')
+            row = res.group('row')
+        return sheet_name, column, row
 
     @staticmethod
     def parse_range_addr(range_addr_str):
         res = Cell._range_addr_regex.match(range_addr_str)
-        if res is not None:
-            sheet_name = res.group('sheetname')
-            sheet_name = sheet_name.strip('\'') if sheet_name is not None else sheet_name
-            startcolumn = res.group('column1')
-            startrow = res.group('row1')
-            endcolumn = res.group('column2')
-            endrow = res.group('row2')
-            return sheet_name, startcolumn, startrow, endcolumn, endrow
-        else:
+        if res is None:
             return None, None, None
+        sheet_name = res.group('sheetname')
+        sheet_name = sheet_name.strip('\'') if sheet_name is not None else sheet_name
+        startcolumn = res.group('column1')
+        startrow = res.group('row1')
+        endcolumn = res.group('column2')
+        endrow = res.group('row2')
+        return sheet_name, startcolumn, startrow, endcolumn, endrow
 
     @staticmethod
     def convert_twip_to_point(twips):
-        # A twip is 1/20 of a point
-        point = int(twips) * 0.05
-        return point
+        return int(twips) * 0.05
 
     @staticmethod
     def get_abs_addr(base_addr, offset_addr):
@@ -144,8 +139,6 @@ class Boundsheet:
         self.cells[cell.get_local_address()] = cell
 
     def get_cell(self, local_address):
-        result = None
-        if local_address in self.cells:
-            result = self.cells[local_address]
+        result = self.cells[local_address] if local_address in self.cells else None
         return
 

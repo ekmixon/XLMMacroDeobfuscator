@@ -31,18 +31,15 @@ class XLSWrapper(ExcelWrapper):
             # flag value starts at 1, list index starts at 0
             self.xl_international_flags[flag_name] = self._international_flags[flag_name.value - 1]
 
-        result = self.xl_international_flags[flag_name]
-        return result
+        return self.xl_international_flags[flag_name]
 
     def get_defined_names(self):
-        result = {}
-
         name_objects = self.xls_workbook.Excel4MacroSheets.Application.Names
 
-        for name_obj in name_objects:
-            result[name_obj.NameLocal.lower()] = str(name_obj.RefersToLocal).strip('=')
-
-        return result
+        return {
+            name_obj.NameLocal.lower(): str(name_obj.RefersToLocal).strip('=')
+            for name_obj in name_objects
+        }
 
     def get_defined_name(self, name, full_match=True):
         result = []
@@ -87,7 +84,7 @@ class XLSWrapper(ExcelWrapper):
             self._excel.Application.ScreenUpdating = True
 
         except pywintypes.com_error as error:
-            print('CELL(Formula): ' + str(error.args[2]))
+            print(f'CELL(Formula): {str(error.args[2])}')
 
         try:
             values= xls_sheet.UsedRange.Value
@@ -108,7 +105,7 @@ class XLSWrapper(ExcelWrapper):
                                 cell.column = Cell.convert_to_column_name(col_addr)
                                 cells[(col_addr, row_addr)] = cell
         except pywintypes.com_error as error:
-            print('CELL(Constant): ' + str(error.args[2]))
+            print(f'CELL(Constant): {str(error.args[2])}')
 
         for cell in cells:
             macrosheet.add_cell(cells[cell])
@@ -179,18 +176,20 @@ if __name__ == '__main__':
 
         auto_open_labels = excel_doc.get_defined_name('auto_open', full_match=False)
         for label in auto_open_labels:
-            print('auto_open: {}->{}'.format(label[0], label[1]))
+            print(f'auto_open: {label[0]}->{label[1]}')
 
         for macrosheet_name in macrosheets:
-            print('SHEET: {}\t{}'.format(macrosheets[macrosheet_name].name,
-                                         macrosheets[macrosheet_name].type))
+            print(
+                f'SHEET: {macrosheets[macrosheet_name].name}\t{macrosheets[macrosheet_name].type}'
+            )
+
             for formula_loc, info in macrosheets[macrosheet_name].cells.items():
                 if info.formula is not None:
-                    print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                    print(f'{formula_loc}\t{info.formula}\t{info.value}')
 
             for formula_loc, info in macrosheets[macrosheet_name].cells.items():
                 if info.formula is None:
-                    print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                    print(f'{formula_loc}\t{info.formula}\t{info.value}')
     finally:
         excel_doc._excel.Application.DisplayAlerts = False
         excel_doc._excel.Application.Quit()

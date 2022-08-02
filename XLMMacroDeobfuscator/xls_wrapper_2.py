@@ -26,10 +26,12 @@ class XLSWrapper2(ExcelWrapper):
                                        XlApplicationInternational.xlListSeparator: ',',
                                        XlApplicationInternational.xlRightBracket: ']'}
 
-        control_chars = ''.join(map(chr, range(0, 32)))
-        control_chars += ''.join(map(chr, range(127, 160)))
+        control_chars = ''.join(map(chr, range(32))) + ''.join(
+            map(chr, range(127, 160))
+        )
+
         control_chars += '\ufefe\uffff\ufeff\ufffe\uffef\ufff0\ufff1\ufff6\ufefd\udddd\ufffd'
-        self._control_char_re = re.compile('[%s]' % re.escape(control_chars))
+        self._control_char_re = re.compile(f'[{re.escape(control_chars)}]')
 
     # from xlrd2
     oBOOL = 3
@@ -43,11 +45,11 @@ class XLSWrapper2(ExcelWrapper):
     oARR = 6
 
     def get_xl_international_char(self, flag_name):
-        result = None
-        if flag_name in self.xl_international_flags:
-            result = self.xl_international_flags[flag_name]
-
-        return result
+        return (
+            self.xl_international_flags[flag_name]
+            if flag_name in self.xl_international_flags
+            else None
+        )
 
     def replace_nonprintable_chars(self, input_str, replace_char=''):
         input_str = input_str.encode("utf-16").decode('utf-16', 'ignore')
@@ -61,11 +63,7 @@ class XLSWrapper2(ExcelWrapper):
 
             for index, (name_obj, cells) in enumerate(name_objects.items()):
                 name = name_obj.lower()
-                if len(cells) > 1:
-                    index = 1
-                else:
-                    index = 0
-
+                index = 1 if len(cells) > 1 else 0
                 # filtered_name = self.replace_nonprintable_chars(name, replace_char='_').lower()
                 filtered_name = name.lower()
                 if name != filtered_name:
@@ -99,7 +97,8 @@ class XLSWrapper2(ExcelWrapper):
                                 r = int(coords[3])
                                 c = int(coords[5])
                                 sheet_name = curr_cell.text.split('!')[0].replace("'", '')
-                                cell_location_xlref = sheet_name + '!' + self.xlref(row=r, column=c, zero_indexed=False)
+                                cell_location_xlref = f'{sheet_name}!{self.xlref(row=r, column=c, zero_indexed=False)}'
+
                                 self._defined_names[name] = cell_location_xlref
 
         return self._defined_names
@@ -109,7 +108,7 @@ class XLSWrapper2(ExcelWrapper):
         if zero_indexed:
             row += 1
             column += 1
-        return '$' + Cell.convert_to_column_name(column) + '$' + str(row)
+        return f'${Cell.convert_to_column_name(column)}${str(row)}'
 
     def get_defined_name(self, name, full_match=True):
         result = []
@@ -152,7 +151,7 @@ class XLSWrapper2(ExcelWrapper):
                 cell = Cell()
                 cell.sheet = macrosheet
                 if xls_cell.formula is not None and len(xls_cell.formula) > 0:
-                    cell.formula = '=' + xls_cell.formula
+                    cell.formula = f'={xls_cell.formula}'
                 cell.value = xls_cell.value
                 cell.row = xls_cell.row + 1
                 cell.column = Cell.convert_to_column_name(xls_cell.column + 1)
@@ -160,7 +159,7 @@ class XLSWrapper2(ExcelWrapper):
                     macrosheet.add_cell(cell)
 
         except Exception as error:
-            print('CELL(Formula): ' + str(error.args[2]))
+            print(f'CELL(Formula): {str(error.args[2])}')
 
     def get_macrosheets(self):
         if self._macrosheets is None:
@@ -216,16 +215,13 @@ class XLSWrapper2(ExcelWrapper):
                 cell = sheet.cell(row, column)
                 if cell.xf_index is not None and cell.xf_index < len(self.xls_workbook.xf_list):
                     fmt = self.xls_workbook.xf_list[cell.xf_index]
-                    font = self.xls_workbook.font_list[fmt.font_index]
-
                 else:
                     normal_style = self.xls_workbook.style_name_map['Normal'][1]
                     fmt = self.xls_workbook.xf_list[normal_style]
-                    font = self.xls_workbook.font_list[fmt.font_index]
             else:
                 normal_style = self.xls_workbook.style_name_map['Normal'][1]
                 fmt = self.xls_workbook.xf_list[normal_style]
-                font = self.xls_workbook.font_list[fmt.font_index]
+            font = self.xls_workbook.font_list[fmt.font_index]
 
             not_exist = False
 
@@ -324,15 +320,17 @@ if __name__ == '__main__':
 
     auto_open_labels = excel_doc.get_defined_name('auto_open', full_match=False)
     for label in auto_open_labels:
-        print('auto_open: {}->{}'.format(label[0], label[1]))
+        print(f'auto_open: {label[0]}->{label[1]}')
 
     for macrosheet_name in macrosheets:
-        print('SHEET: {}\t{}'.format(macrosheets[macrosheet_name].name,
-                                     macrosheets[macrosheet_name].type))
+        print(
+            f'SHEET: {macrosheets[macrosheet_name].name}\t{macrosheets[macrosheet_name].type}'
+        )
+
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is not None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')
 
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')

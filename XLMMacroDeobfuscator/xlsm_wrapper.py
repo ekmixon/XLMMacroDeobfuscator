@@ -60,10 +60,11 @@ class XLSMWrapper(ExcelWrapper):
         result = {}
         if self._workbook_relationships is None:
             main = self._get_workbook_rels()
-            if hasattr(main, 'Relationships'):
-                if hasattr(main.Relationships, 'Relationship'):
-                    for i in main.Relationships.Relationship:
-                        result[i.get_attribute('Id')] = i
+            if hasattr(main, 'Relationships') and hasattr(
+                main.Relationships, 'Relationship'
+            ):
+                for i in main.Relationships.Relationship:
+                    result[i.get_attribute('Id')] = i
             self._workbook_relationships = result
         else:
             result = self._workbook_relationships
@@ -71,11 +72,11 @@ class XLSMWrapper(ExcelWrapper):
         return result
 
     def get_xl_international_char(self, flag_name):
-        result = None
-        if flag_name in self.xl_international_flags:
-            result = self.xl_international_flags[flag_name]
-
-        return result
+        return (
+            self.xl_international_flags[flag_name]
+            if flag_name in self.xl_international_flags
+            else None
+        )
 
     def get_files(self, file_name_filters=None):
         input_zip = ZipFile(self.xlsm_doc_path)
@@ -164,7 +165,7 @@ class XLSMWrapper(ExcelWrapper):
             if style_type in relationships:
                 style_sheet_path = relationships[style_type]
                 _, base_dir, _ = self._get_workbook_path()
-                style_sheet = self.get_xml_file(base_dir+'/'+style_sheet_path)
+                style_sheet = self.get_xml_file(f'{base_dir}/{style_sheet_path}')
             self._workbook_style = style_sheet
 
         return self._workbook_style
@@ -178,7 +179,7 @@ class XLSMWrapper(ExcelWrapper):
 
             workbook_path, base_dir, name = self._get_workbook_path()
 
-            path = '{}/_{}/{}.{}'.format(base_dir, type, name, type)
+            path = f'{base_dir}/_{type}/{name}.{type}'
             workbook = self.get_xml_file(path)
             self._workbook_rels = workbook
         return self._workbook_rels
@@ -194,8 +195,10 @@ class XLSMWrapper(ExcelWrapper):
         if rId in relationships:
             sheet_path = relationships[rId].get_attribute('Target')
             type = relationships[rId].get_attribute('Type')
-            if type == "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet" or \
-                    type == 'http://schemas.microsoft.com/office/2006/relationships/xlIntlMacrosheet':
+            if type in [
+                "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet",
+                'http://schemas.microsoft.com/office/2006/relationships/xlIntlMacrosheet',
+            ]:
                 sheet_type = 'Macrosheet'
             elif type == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet":
                 sheet_type = 'Worksheet'
@@ -220,16 +223,16 @@ class XLSMWrapper(ExcelWrapper):
     def get_sheet_infos(self, types):
         result = []
         workbook_obj = self.get_workbook()
-        sheet_names = set()
-
         _, base_dir, _ = self._get_workbook_path()
         if hasattr(workbook_obj, 'workbook'):
+            sheet_names = set()
+
             for sheet_elm in workbook_obj.workbook.sheets.sheet:
                 rId = sheet_elm.get_attribute('r:id')
                 name = sheet_elm.get_attribute('name')
                 sheet_type, rel_path = self.get_sheet_info(rId)
                 if rel_path is not None:
-                    path = base_dir + '/' + rel_path
+                    path = f'{base_dir}/{rel_path}'
                     if sheet_type in types and name not in sheet_names:
                         sheet = Boundsheet(name, sheet_type)
                         result.append({'sheet': sheet,
@@ -237,7 +240,7 @@ class XLSMWrapper(ExcelWrapper):
                                        'sheet_xml': self.get_xml_file(path, ignore_pattern="<c[^>]+/>")})
                         sheet_names.add(name)
                 else:
-                    print("Sheet('{}') does not have a valid rId('{}')".format(name, rId))
+                    print(f"Sheet('{name}') does not have a valid rId('{rId}')")
 
         return result
 
@@ -250,16 +253,19 @@ class XLSMWrapper(ExcelWrapper):
     def get_shared_strings(self):
         if self._shared_strings is None:
             _, base_dir, _ = self._get_workbook_path()
-            content = self.get_xml_file(base_dir + '/sharedStrings.xml')
-            if content is not None:
-                if hasattr(content, 'sst') and hasattr(content.sst, 'si'):
-                    for str in content.sst.si:
-                        if self._shared_strings is None:
-                            self._shared_strings = []
-                        if hasattr(str, 't'):
-                            self._shared_strings.append(str.t.cdata)
-                        elif hasattr(str, 'r') and len(str.r) > 0 and hasattr(str.r[0], 't'):
-                            self._shared_strings.append(str.r[0].t.cdata)
+            content = self.get_xml_file(f'{base_dir}/sharedStrings.xml')
+            if (
+                content is not None
+                and hasattr(content, 'sst')
+                and hasattr(content.sst, 'si')
+            ):
+                for str in content.sst.si:
+                    if self._shared_strings is None:
+                        self._shared_strings = []
+                    if hasattr(str, 't'):
+                        self._shared_strings.append(str.t.cdata)
+                    elif hasattr(str, 'r') and len(str.r) > 0 and hasattr(str.r[0], 't'):
+                        self._shared_strings.append(str.r[0].t.cdata)
 
         return self._shared_strings
 
@@ -274,7 +280,7 @@ class XLSMWrapper(ExcelWrapper):
                     row_attribs[RowAttribute.Height] = row.get_attribute('ht')
                 elif attr == 'spans':
                     row_attribs[RowAttribute.Spans] = row.get_attribute('spans')
-            if len(row_attribs) > 0:
+            if row_attribs:
                 macrosheet.row_attributes[row.get_attribute('r')] = row_attribs
             if hasattr(row, 'c'):
                 for cell_elm in row.c:
@@ -282,14 +288,13 @@ class XLSMWrapper(ExcelWrapper):
                     if hasattr(cell_elm, 'f'):
                         formula = cell_elm.f
                         if formula.get_attribute('bx') == "1":
-                            text = formula.cdata
                             formula_text = None
-                            if text:
+                            if text := formula.cdata:
                                 first_eq_sign = text.find('=')
                                 if first_eq_sign > 0:
-                                    formula_text = '=SET.NAME("{}",{})'.format(text[:first_eq_sign], text[first_eq_sign+1:])
+                                    formula_text = f'=SET.NAME("{text[:first_eq_sign]}",{text[first_eq_sign+1:]})'
                         else:
-                            formula_text = ('=' + formula.cdata) if formula is not None else None
+                            formula_text = f'={formula.cdata}' if formula is not None else None
                     value_text = None
                     is_string = False
                     if 't' in cell_elm._attributes and cell_elm.get_attribute('t') == 's':
@@ -329,14 +334,14 @@ class XLSMWrapper(ExcelWrapper):
                     row_attribs[RowAttribute.Height] = row.get_attribute('ht')
                 elif attr == 'spans':
                     row_attribs[RowAttribute.Spans] = row.get_attribute('spans')
-            if len(row_attribs) > 0:
+            if row_attribs:
                 macrosheet.row_attributes[row.get_attribute('r')] = row_attribs
             if hasattr(row, 'c'):
                 for cell_elm in row.c:
                     formula_text = None
                     if hasattr(cell_elm, 'f'):
                         formula = cell_elm.f
-                        formula_text = ('=' + formula.cdata) if formula is not None else None
+                        formula_text = f'={formula.cdata}' if formula is not None else None
                     value_text = None
                     is_string = False
                     if 't' in cell_elm._attributes and cell_elm.get_attribute('t') == 's':
@@ -405,8 +410,12 @@ class XLSMWrapper(ExcelWrapper):
 
     def get_color_index(self, rgba_str):
 
-        r, g, b = int('0x' + rgba_str[2:4], base=16), int('0x' + rgba_str[4:6], base=16), int(
-            '0x' + rgba_str[6:8], base=16)
+        r, g, b = (
+            int(f'0x{rgba_str[2:4]}', base=16),
+            int(f'0x{rgba_str[4:6]}', base=16),
+            int(f'0x{rgba_str[6:8]}', base=16),
+        )
+
 
         if self.color_maps is None:
             colors = [
@@ -432,12 +441,7 @@ class XLSMWrapper(ExcelWrapper):
                 if (c_r, c_g, c_b) not in self.color_maps:
                     self.color_maps[(c_r, c_g, c_b)] = index
 
-        color_index = None
-
-        if (r, g, b) in self.color_maps:
-            color_index = self.color_maps[(r, g, b)]
-
-        return color_index
+        return self.color_maps[(r, g, b)] if (r, g, b) in self.color_maps else None
 
     def get_cell_info(self, sheet_name, col, row, info_type_id):
         data = None
@@ -485,19 +489,19 @@ class XLSMWrapper(ExcelWrapper):
                 NotImplemented = True
 
             if info_type_id == 8:
-                h_align_map = {
-                    'general': 1,
-                    'left': 2,
-                    'center': 3,
-                    'right': 4,
-                    'fill': 5,
-                    'justify': 6,
-                    'centerContinuous': 7,
-                    'distributed': 8
-                }
-
                 if hasattr(cell_format, 'alignment'):
                     horizontal_alignment = cell_format.alignment.get_attribute('horizontal')
+                    h_align_map = {
+                        'general': 1,
+                        'left': 2,
+                        'center': 3,
+                        'right': 4,
+                        'fill': 5,
+                        'justify': 6,
+                        'centerContinuous': 7,
+                        'distributed': 8
+                    }
+
                     data = h_align_map[horizontal_alignment.lower()]
 
                 else:
@@ -556,15 +560,17 @@ if __name__ == '__main__':
 
     auto_open_labels = xlsm_doc.get_defined_name('auto_open', full_match=False)
     for label in auto_open_labels:
-        print('auto_open: {}->{}'.format(label[0], label[1]))
+        print(f'auto_open: {label[0]}->{label[1]}')
 
     for macrosheet_name in macrosheets:
-        print('SHEET: {}\t{}'.format(macrosheets[macrosheet_name].name,
-                                     macrosheets[macrosheet_name].type))
+        print(
+            f'SHEET: {macrosheets[macrosheet_name].name}\t{macrosheets[macrosheet_name].type}'
+        )
+
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is not None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')
 
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')

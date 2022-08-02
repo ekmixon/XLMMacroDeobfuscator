@@ -104,16 +104,15 @@ class EvalResult:
     def wrap_str_literal(data):
         result = ''
         if EvalResult.is_float(data) or (len(data) > 1 and data.startswith('"') and data.endswith('"')):
-            result = str(data)
+            return str(data)
         elif type(data) is float:
             if data.is_integer():
                 data = int(data)
-            result = str(data)
+            return str(data)
         elif type(data) is int or type(data) is bool:
-            result = str(data)
+            return str(data)
         else:
-            result = '"{}"'.format(data.replace('"', '""'))
-        return result
+            return '"{}"'.format(data.replace('"', '""'))
 
     def get_text(self, unwrap=False):
         result = ''
@@ -125,19 +124,12 @@ class EvalResult:
                     self.text = int(self.text)
                     self.text = str(self.text)
 
-            if unwrap:
-                result = self.unwrap_str_literal(self.text)
-            else:
-                result = str(self.text)
-
+            result = self.unwrap_str_literal(self.text) if unwrap else str(self.text)
         return result
 
     def set_text(self, data, wrap=False):
         if data is not None:
-            if wrap:
-                self.text = self.wrap_str_literal(data)
-            else:
-                self.text = str(data)
+            self.text = self.wrap_str_literal(data) if wrap else str(data)
 
 
 class XLMInterpreter:
@@ -344,12 +336,11 @@ class XLMInterpreter:
         result = None
         text = text.lower()
         if text == 'false':
-            result = 0
+            return 0
         elif text == 'true':
-            result = 1
+            return 1
         else:
-            result = float(text)
-        return result
+            return float(text)
 
     def get_parser(self):
         xlm_parser = None
@@ -370,13 +361,12 @@ class XLMInterpreter:
         return xlm_parser
 
     def get_formula_cell(self, macrosheet, col, row):
-        result_cell = None
         not_found = False
         row = int(row)
         current_row = row
         current_addr = col + str(current_row)
         while current_addr not in macrosheet.cells or \
-                macrosheet.cells[current_addr].formula is None:
+                    macrosheet.cells[current_addr].formula is None:
             if (current_row - row) < 10000:
                 current_row += 1
             else:
@@ -384,10 +374,7 @@ class XLMInterpreter:
                 break
             current_addr = col + str(current_row)
 
-        if not_found is False:
-            result_cell = macrosheet.cells[current_addr]
-
-        return result_cell
+        return macrosheet.cells[current_addr] if not_found is False else None
 
     def get_range_parts(self, parse_tree):
         if isinstance(parse_tree, Tree) and parse_tree.data == 'range':
@@ -404,24 +391,23 @@ class XLMInterpreter:
             label = cell_parse_tree.value.lower()
             if label in names:
                 name_val = names[label]
-                if isinstance(name_val, Tree):
-                    # example: 6a8045bc617df5f2b8f9325ed291ef05ac027144f1fda84e78d5084d26847902
-                    res_sheet, res_col, res_row = self.get_cell_addr(current_cell, name_val)
-                else:
-                    res_sheet, res_col, res_row = Cell.parse_cell_addr(name_val)
+                res_sheet, res_col, res_row = (
+                    self.get_cell_addr(current_cell, name_val)
+                    if isinstance(name_val, Tree)
+                    else Cell.parse_cell_addr(name_val)
+                )
+
             elif label.strip('"') in names:
                 res_sheet, res_col, res_row = Cell.parse_cell_addr(names[label.strip('"')])
-            else:
-
-                if len(label) > 1 and label.startswith('"') and label.endswith('"'):
-                    label = label.strip('"')
-                    root_parse_tree = self.xlm_parser.parse('=' + label)
-                    res_sheet, res_col, res_row = self.get_cell_addr(current_cell, root_parse_tree.children[0])
+            elif len(label) > 1 and label.startswith('"') and label.endswith('"'):
+                label = label.strip('"')
+                root_parse_tree = self.xlm_parser.parse(f'={label}')
+                res_sheet, res_col, res_row = self.get_cell_addr(current_cell, root_parse_tree.children[0])
         else:
             if cell_parse_tree.data == 'defined_name':
-                label = '{}'.format(cell_parse_tree.children[2])
+                label = f'{cell_parse_tree.children[2]}'
                 formula_str = self.xlm_wrapper.get_defined_name(label)
-                parsed_tree = self.xlm_parser.parse('=' + formula_str)
+                parsed_tree = self.xlm_parser.parse(f'={formula_str}')
                 if isinstance(parsed_tree.children[0], Tree) and parsed_tree.children[0].data == 'range':
                     start_cell, end_cell = self.get_range_parts(parsed_tree.children[0])
                     cell = start_cell.children[0]
@@ -432,7 +418,7 @@ class XLMInterpreter:
 
             if cell.data == 'a1_notation_cell':
                 if len(cell.children) == 2:
-                    cell_addr = "'{}'!{}".format(cell.children[0], cell.children[1])
+                    cell_addr = f"'{cell.children[0]}'!{cell.children[1]}"
                 else:
                     cell_addr = cell.children[0]
                 res_sheet, res_col, res_row = Cell.parse_cell_addr(cell_addr)
@@ -522,11 +508,7 @@ class XLMInterpreter:
             text = EvalResult.unwrap_str_literal(text)
 
             if not set_value_only:
-                if text.startswith('='):
-                    cell.formula = text
-                else:
-                    cell.formula = None
-
+                cell.formula = text if text.startswith('=') else None
             cell.value = text
 
     @staticmethod
@@ -534,13 +516,12 @@ class XLMInterpreter:
         if type(parse_tree_root) == Token:
             return str(parse_tree_root)
         else:
-            result = ''
-            for child in parse_tree_root.children:
-                result += XLMInterpreter.convert_ptree_to_str(child)
-            return result
+            return ''.join(
+                XLMInterpreter.convert_ptree_to_str(child)
+                for child in parse_tree_root.children
+            )
 
     def get_window(self, number):
-        result = None
         if len(self._window_defaults) == 0:
             script_dir = os.path.dirname(__file__)
             config_dir = os.path.join(script_dir, 'configs')
@@ -553,13 +534,13 @@ class XLMInterpreter:
                         else:
                             self._window_defaults[index + 1] = line
 
-        if number in self._window_defaults:
-            result = self._window_defaults[number]
-
-        return result
+        return (
+            self._window_defaults[number]
+            if number in self._window_defaults
+            else None
+        )
 
     def get_workspace(self, number):
-        result = None
         if len(self._workspace_defaults) == 0:
             script_dir = os.path.dirname(__file__)
             config_dir = os.path.join(script_dir, 'configs')
@@ -569,12 +550,13 @@ class XLMInterpreter:
                     if len(line) > 0:
                         self._workspace_defaults[index + 1] = line
 
-        if number in self._workspace_defaults:
-            result = self._workspace_defaults[number]
-        return result
+        return (
+            self._workspace_defaults[number]
+            if number in self._workspace_defaults
+            else None
+        )
 
     def get_default_cell_info(self, number):
-        result = None
         if len(self._cell_defaults) == 0:
             script_dir = os.path.dirname(__file__)
             config_dir = os.path.join(script_dir, 'configs')
@@ -584,9 +566,7 @@ class XLMInterpreter:
                     if len(line) > 0:
                         self._cell_defaults[index + 1] = line
 
-        if number in self._cell_defaults:
-            result = self._cell_defaults[number]
-        return result
+        return self._cell_defaults[number] if number in self._cell_defaults else None
 
     def evaluate_formula(self, current_cell, name, arguments, interactive, destination_arg=1, set_value_only=False):
         # hash: fa391403aa028fa7b42a9f3491908f6f25414c35bfd104f8cf186220fb3b4f83" --> =FORMULA()

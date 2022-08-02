@@ -21,11 +21,11 @@ class XLSBWrapper(ExcelWrapper):
         return self.xlsm_workbook_name
 
     def get_xl_international_char(self, flag_name):
-        result = None
-        if flag_name in self.xl_international_flags:
-            result = self.xl_international_flags[flag_name]
-
-        return result
+        return (
+            self.xl_international_flags[flag_name]
+            if flag_name in self.xl_international_flags
+            else None
+        )
 
     def get_defined_names(self):
         if self._defined_names is None:
@@ -41,9 +41,12 @@ class XLSBWrapper(ExcelWrapper):
             if name.lower() in self.get_defined_names():
                 result.append(self.get_defined_names()[name.lower()])
         else:
-            for defined_name, cell_address in self.get_defined_names().items():
-                if defined_name.startswith(name.lower()):
-                    result.append(cell_address)
+            result.extend(
+                cell_address
+                for defined_name, cell_address in self.get_defined_names().items()
+                if defined_name.startswith(name.lower())
+            )
+
         return result
 
     def load_cells(self, boundsheet):
@@ -65,11 +68,11 @@ class XLSBWrapper(ExcelWrapper):
                     formula_str = Formula.parse(cell.formula)
                     if formula_str._tokens:
                         try:
-                            tmp_cell.formula = '=' + formula_str.stringify(self._xlsb_workbook)
+                            tmp_cell.formula = f'={formula_str.stringify(self._xlsb_workbook)}'
                         except NotImplementedError as exp:
-                            print('ERROR({}) {}'.format(exp, str(cell)))
+                            print(f'ERROR({exp}) {str(cell)}')
                         except Exception:
-                            print('ERROR ' + str(cell))
+                            print(f'ERROR {str(cell)}')
                     if tmp_cell.value is not None or tmp_cell.formula is not None:
                         boundsheet.cells[tmp_cell.get_local_address()] = tmp_cell
                     column_cnt = column_cnt + 1
@@ -121,15 +124,17 @@ if __name__ == '__main__':
 
     auto_open_labels = excel_doc.get_defined_name('auto_open', full_match=False)
     for label in auto_open_labels:
-        print('auto_open: {}->{}'.format(label[0], label[1]))
+        print(f'auto_open: {label[0]}->{label[1]}')
 
     for macrosheet_name in macrosheets:
-        print('SHEET: {}\t{}'.format(macrosheets[macrosheet_name].name,
-                                     macrosheets[macrosheet_name].type))
+        print(
+            f'SHEET: {macrosheets[macrosheet_name].name}\t{macrosheets[macrosheet_name].type}'
+        )
+
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is not None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')
 
         for formula_loc, info in macrosheets[macrosheet_name].cells.items():
             if info.formula is None:
-                print('{}\t{}\t{}'.format(formula_loc, info.formula, info.value))
+                print(f'{formula_loc}\t{info.formula}\t{info.value}')
